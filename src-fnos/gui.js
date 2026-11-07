@@ -22,6 +22,9 @@ let pendingExit = null;
 const IS_WIN = process.platform === 'win32';
 const IS_MAC = process.platform === 'darwin';
 const CAN_OPEN_LOCAL = IS_WIN || IS_MAC;
+// 仅桌面托管模式（Windows 本地运行、未设 WPS_NO_WINDOW）允许网页关闭即退出；
+// NAS/服务端托管模式必须常驻，避免浏览器刷新或关标签页把服务杀掉。
+const ALLOW_SELF_EXIT = IS_WIN && process.env.WPS_NO_WINDOW !== '1';
 
 const state = {
 	busy: false,
@@ -427,9 +430,20 @@ function route(req, res, url) {
 		return;
 	}
 
+	if (req.method === 'POST' && p === '/api/quit' && !ALLOW_SELF_EXIT) {
+		json(res, 403, { ok: false, error: 'service-mode: 本服务由 NAS 托管的常驻进程提供，不支持从网页退出，请在应用中心停止应用' });
+		return;
+	}
+
 	if (req.method === 'POST' && p === '/api/quit') {
 		json(res, 200, { ok: true });
 		setTimeout(shutdown, 200);
+		return;
+	}
+
+	if (req.method === 'POST' && p === '/api/bye' && !ALLOW_SELF_EXIT) {
+		// 服务模式：关闭或刷新浏览器标签页不影响后端服务
+		json(res, 200, { ok: true, ignored: true });
 		return;
 	}
 
