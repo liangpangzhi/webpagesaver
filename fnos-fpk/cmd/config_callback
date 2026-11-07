@@ -1,0 +1,47 @@
+#!/bin/bash
+set -u
+APPNAME="webpagesaver"
+DATADIR="${TRIM_PKGVAR:-/var/apps/${APPNAME}/var}"
+CONF="${DATADIR}/archive_dir.conf"
+
+WANT="$(printf '%s' "${wizard_archive_dir:-}" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+while [ "${WANT%/}" != "$WANT" ]; do WANT="${WANT%/}"; done
+
+[ -n "$WANT" ] || exit 0
+
+case "$WANT" in
+  /*) ;;
+  *) echo "webpagesaver: 存档保存地址必须是绝对路径：${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1 ;;
+esac
+case "$WANT" in
+  *" "*) echo "webpagesaver: 存档保存地址不能包含空格：${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1 ;;
+  *..*) echo "webpagesaver: 存档保存地址不能包含 ..：${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1 ;;
+  /var|/var/apps|/var/apps/*|/etc|/etc/*|/usr|/usr/*|/bin|/bin/*|/sbin|/sbin/*|\
+  /lib|/lib/*|/lib64|/lib64/*|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|\
+  /boot|/boot/*|/run|/run/*|/root|/root/*|/tmp|/tmp/*|/"${APPNAME}")
+    echo "webpagesaver: 存档保存地址不能位于系统目录：${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1 ;;
+esac
+if printf '%s' "$WANT" | grep -Eq '^/vol[0-9]+/?$'; then
+  echo "webpagesaver: 不能使用存储卷根目录，请填写其下的子目录：${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1
+fi
+mkdir -p "$WANT" 2>/dev/null || { echo "webpagesaver: 无法创建目录 ${WANT}" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null; exit 1; }
+chmod 755 "$WANT" 2>/dev/null || true
+if ! touch "${WANT}/.wps_write_test" 2>/dev/null; then
+  echo "webpagesaver: 目录 ${WANT} 不可写" >>"${TRIM_TEMP_LOGFILE:-/dev/null}" 2>/dev/null
+  exit 1
+fi
+rm -f "${WANT}/.wps_write_test" 2>/dev/null
+
+mkdir -p "${DATADIR}" 2>/dev/null
+printf 'ARCHIVE_DIR=%s\n' "$WANT" >"$CONF" 2>/dev/null || exit 1
+
+for base in "/var/apps/${APPNAME}" "${TRIM_APPDEST:-}/app" "${TRIM_APPDEST:-}" "/var/apps/${APPNAME}/target" "/var/apps/${APPNAME}/app"; do
+  if [ -n "$base" ] && [ -f "$base/cmd/main" ]; then
+    bash "$base/cmd/main" stop >/dev/null 2>&1 || true
+    bash "$base/cmd/main" start >/dev/null 2>&1 || true
+    break
+  fi
+done
+
+echo "webpagesaver: 网页存档保存地址已更新为 ${WANT}"
+exit 0

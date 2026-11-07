@@ -1,8 +1,9 @@
 node_modules/
 dist/
 build/
+fnos-fpk/app/src/bundle.cjs
+*.fpk
 网页存档/
 test-archive/
 *.log
 webpagesaver.config.json
-ui-shot.png

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -u
+APPNAME="webpagesaver"
+
+for base in "/var/apps/${APPNAME}" "${TRIM_APPDEST:-}/app" "${TRIM_APPDEST:-}" "/var/apps/${APPNAME}/target/app" "/var/apps/${APPNAME}/target" "/var/apps/${APPNAME}/app"; do
+  if [ -n "$base" ] && [ -f "$base/cmd/main" ]; then
+    bash "$base/cmd/main" stop >/dev/null 2>&1 || true
+    break
+  fi
+done
+
+pkill -f "${APPNAME}/src/bundle.cjs" >/dev/null 2>&1 || true
+mkdir -p "/var/apps/${APPNAME}/var/archive" 2>/dev/null
+
+CONF="/var/apps/${APPNAME}/var/archive_dir.conf"
+if [ -f "$CONF" ]; then
+  ARCH="$(sed -n 's|^ARCHIVE_DIR=||p' "$CONF" 2>/dev/null | tail -n 1 | tr -d '\r')"
+  [ -n "$ARCH" ] && mkdir -p "$ARCH" 2>/dev/null
+fi
+exit 0

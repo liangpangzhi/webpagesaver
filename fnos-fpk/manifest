@@ -1,0 +1,17 @@
+appname=webpagesaver
+version=1.0.3
+display_name=网页离线存档
+desc=WebPageSaver：把任意网页保存为可离线打开的完整单文件 HTML（图片、样式、字体、iframe 全部内联，弹窗广告自动剔除）。安装后通过浏览器访问 http://NAS-IP:8799 使用；存档文件落在应用数据目录，可随时下载。
+source=thirdparty
+platform=x86
+
+maintainer=liangpangzhi
+maintainer_url=https://github.com/liangpangzhi/webpagesaver
+
+desktop_uidir=ui
+desktop_applaunchname=webpagesaver.Application
+
+service_port=8799
+ctl_stop=true
+checkport=true
+changelog=1.0.3 修复 NAS 上按钮点击无反应：「打开存档文件」改为浏览器内直接预览并提供下载；「在文件夹中显示」「打开存档文件夹」改为复制路径并弹出提示；无桌面环境时不再尝试自动打开；接口失败统一弹提示。1.0.2 支持安装时自定义存档地址。

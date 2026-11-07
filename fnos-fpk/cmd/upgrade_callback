@@ -1,0 +1,11 @@
+#!/bin/bash
+set -u
+APPNAME="webpagesaver"
+
+for base in "/var/apps/${APPNAME}" "${TRIM_APPDEST:-}/app" "${TRIM_APPDEST:-}" "/var/apps/${APPNAME}/target/app" "/var/apps/${APPNAME}/target" "/var/apps/${APPNAME}/app"; do
+  if [ -n "$base" ] && [ -f "$base/cmd/main" ]; then
+    bash "$base/cmd/main" restart >/dev/null 2>&1 || bash "$base/cmd/main" start
+    exit 0
+  fi
+done
+exit 0

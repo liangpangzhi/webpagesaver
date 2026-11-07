@@ -1,22 +1,26 @@
 {
   "name": "webpagesaver",
   "version": "1.0.0",
-  "description": "把网页完整保存为单个 HTML 文件（离线可看，保留布局与页面比例，自动剔除弹窗广告）",
+  "description": "把网页完整保存为单个 HTML 文件（离线可看，保留布局与页面比例，自动剔除弹窗广告）；提供 Windows 桌面版与飞牛 fnOS NAS 版",
   "bin": "src/index.js",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "build": "pkg . --targets node22-win-x64 --output dist/WebPageSaver.exe --compress GZip",
-    "test": "node src/index.js https://example.com -o test.html"
+    "test": "node src/index.js https://example.com -o test.html",
+    "build:fnos": "python fnos-fpk/build-fpk.py"
   },
   "keywords": [
     "singlefile",
     "save-page",
     "offline",
     "html",
-    "snapshot"
+    "snapshot",
+    "fnos",
+    "fpk",
+    "nas"
   ],
-  "author": "",
+  "author": "liangpangzhi",
   "license": "MIT",
   "dependencies": {
     "puppeteer-core": "^23.11.1"

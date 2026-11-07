@@ -1,0 +1,15 @@
+#!/bin/bash
+set -u
+APPNAME="webpagesaver"
+
+for base in "/var/apps/${APPNAME}" "${TRIM_APPDEST:-}/app" "${TRIM_APPDEST:-}" "/var/apps/${APPNAME}/target/app" "/var/apps/${APPNAME}/target" "/var/apps/${APPNAME}/app"; do
+  if [ -n "$base" ] && [ -f "$base/cmd/main" ]; then
+    bash "$base/cmd/main" stop >/dev/null 2>&1 || true
+    break
+  fi
+done
+
+pkill -f "${APPNAME}/src/bundle.cjs" >/dev/null 2>&1 || true
+
+echo "webpagesaver: 已停止服务，存档目录 /var/apps/${APPNAME}/var/archive 已保留"
+exit 0

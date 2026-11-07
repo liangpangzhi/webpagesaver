@@ -1,0 +1,61 @@
+#!/bin/bash
+set -u
+
+APPNAME="webpagesaver"
+DATADIR="/var/apps/${APPNAME}/var"
+RT="${DATADIR}/runtime"
+TMPDIR="${DATADIR}/tmp"
+LOGFILE="${DATADIR}/app.log"
+NODE_VER="22.12.0"
+CHROME_VER="138.0.7204.157"
+
+log() { echo "[$(date '+%F %T')] $*" >>"$LOGFILE" 2>/dev/null; }
+
+dl() {
+  curl -fsSL --retry 2 --connect-timeout 15 -m 1800 -o "$2" "$1" && [ -s "$2" ]
+}
+
+mkdir -p "$RT" "$TMPDIR" "${RT}/home"
+
+if [ ! -x "${RT}/node/bin/node" ]; then
+  log "provision: downloading node v${NODE_VER}"
+  ok=0
+  for u in \
+    "https://cdn.npmmirror.com/binaries/node/v${NODE_VER}/node-v${NODE_VER}-linux-x64.tar.xz" \
+    "https://registry.npmmirror.com/-/binary/node/v${NODE_VER}/node-v${NODE_VER}-linux-x64.tar.xz" \
+    "https://nodejs.org/dist/v${NODE_VER}/node-v${NODE_VER}-linux-x64.tar.xz" ; do
+    if dl "$u" "${TMPDIR}/node.tar.xz"; then ok=1; break; fi
+    log "provision: node mirror failed: $u"
+  done
+  [ "$ok" = 1 ] || { log "provision: ERR node download failed"; exit 1; }
+  mkdir -p "${RT}/node"
+  tar -xJf "${TMPDIR}/node.tar.xz" -C "${RT}/node" --strip-components=1 || { log "provision: ERR node extract"; exit 1; }
+  rm -f "${TMPDIR}/node.tar.xz"
+  log "provision: node ready $("${RT}/node/bin/node" -v 2>&1)"
+fi
+
+if [ ! -x "${RT}/chrome/chrome" ]; then
+  log "provision: downloading chrome ${CHROME_VER}"
+  ok=0
+  for u in \
+    "https://cdn.npmmirror.com/binaries/chrome-for-testing/${CHROME_VER}/linux64/chrome-linux64.zip" \
+    "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VER}/linux64/chrome-linux64.zip" ; do
+    if dl "$u" "${TMPDIR}/chrome.zip"; then ok=1; break; fi
+    log "provision: chrome mirror failed: $u"
+  done
+  [ "$ok" = 1 ] || { log "provision: ERR chrome download failed"; exit 1; }
+  mkdir -p "${TMPDIR}/chromex"
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -q -o "${TMPDIR}/chrome.zip" -d "${TMPDIR}/chromex" || { log "provision: ERR unzip"; exit 1; }
+  else
+    python3 -c "import zipfile,sys;zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])" "${TMPDIR}/chrome.zip" "${TMPDIR}/chromex" || { log "provision: ERR unzip(py)"; exit 1; }
+  fi
+  mkdir -p "${RT}/chrome"
+  cp -a "${TMPDIR}/chromex/chrome-linux64/." "${RT}/chrome/" || { log "provision: ERR chrome install"; exit 1; }
+  chmod +x "${RT}/chrome/chrome" 2>/dev/null || true
+  rm -f "${TMPDIR}/chrome.zip"
+  log "provision: chrome ready $("${RT}/chrome/chrome" --version 2>&1 | head -1)"
+fi
+
+log "provision: done"
+exit 0

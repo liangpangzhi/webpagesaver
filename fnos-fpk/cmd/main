@@ -1,0 +1,142 @@
+#!/bin/bash
+set -u
+
+APPNAME="webpagesaver"
+APPBASE="/var/apps/${APPNAME}"
+DATADIR="${APPBASE}/var"
+RT="${DATADIR}/runtime"
+NODE_BIN="${RT}/node/bin/node"
+CHROME_BIN="${RT}/chrome/chrome"
+HOME_DIR="${RT}/home"
+CONF="${DATADIR}/archive_dir.conf"
+DEFAULT_ARCHIVE_DIR="${DATADIR}/archive"
+ARCHIVE_DIR="$DEFAULT_ARCHIVE_DIR"
+LOGFILE="${DATADIR}/app.log"
+PIDFILE="${DATADIR}/app.pid"
+PORT="8799"
+
+log() { echo "[$(date '+%F %T')] $*" >>"$LOGFILE" 2>/dev/null; }
+
+# 读取安装时保存的自定义存档地址：优先配置文件，其次安装向导弹出的环境变量
+load_archive_dir() {
+  local v
+  if [ -f "$CONF" ]; then
+    v="$(sed -n 's|^ARCHIVE_DIR=||p' "$CONF" 2>/dev/null | tail -n 1 | tr -d '\r')"
+    v="$(printf '%s' "$v" | sed "s/^['\"]//; s/['\"]$//")"
+  fi
+  if [ -z "${v:-}" ] && [ -n "${wizard_archive_dir:-}" ]; then
+    v="$(printf '%s' "$wizard_archive_dir" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    if [ -n "$v" ]; then
+      mkdir -p "$(dirname "$CONF")" 2>/dev/null
+      printf 'ARCHIVE_DIR=%s\n' "$v" >"$CONF" 2>/dev/null || true
+    fi
+  fi
+  [ -n "${v:-}" ] && ARCHIVE_DIR="$v"
+  return 0
+}
+
+# 存档目录不可用时回退到默认目录，保证服务能起来
+prepare_archive_dir() {
+  load_archive_dir
+  if [ "$ARCHIVE_DIR" != "$DEFAULT_ARCHIVE_DIR" ]; then
+    mkdir -p "$ARCHIVE_DIR" 2>/dev/null
+    chmod 755 "$ARCHIVE_DIR" 2>/dev/null || true
+    if ! touch "${ARCHIVE_DIR}/.wps_write_test" 2>/dev/null; then
+      log "WARN: archive dir ${ARCHIVE_DIR} unavailable, fallback to ${DEFAULT_ARCHIVE_DIR}"
+      ARCHIVE_DIR="$DEFAULT_ARCHIVE_DIR"
+    else
+      rm -f "${ARCHIVE_DIR}/.wps_write_test" 2>/dev/null
+    fi
+  fi
+  mkdir -p "$ARCHIVE_DIR" "$HOME_DIR" "${DATADIR}/tmp"
+}
+
+resolve_app_dir() {
+  local base
+  for base in "${APPBASE}/target" "${APPBASE}/target/app" "${APPBASE}/app" "${TRIM_APPDEST:-}/app" "${TRIM_APPDEST:-}"; do
+    if [ -n "$base" ] && [ -f "$base/src/bundle.cjs" ]; then
+      echo "$base"
+      return 0
+    fi
+  done
+  return 1
+}
+
+port_open() {
+  ss -ltn 2>/dev/null | grep -qE "[:.]${PORT}[[:space:]]"
+}
+
+do_stop() {
+  if [ -f "$PIDFILE" ]; then
+    local pid
+    pid="$(cat "$PIDFILE" 2>/dev/null)"
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null
+  fi
+  pkill -f "src/bundle.cjs" >/dev/null 2>&1 || true
+  sleep 1
+  pkill -9 -f "src/bundle.cjs" >/dev/null 2>&1 || true
+  rm -f "$PIDFILE"
+  pkill -f "${RT}/chrome/chrome" >/dev/null 2>&1 || true
+}
+
+case "${1:-}" in
+  start)
+    APPDIR="$(resolve_app_dir)" || { log "ERR: bundle.cjs not found"; exit 1; }
+    prepare_archive_dir
+    log "########## START (native) appdir=$APPDIR archive_dir=$ARCHIVE_DIR ##########"
+
+    if [ ! -x "$NODE_BIN" ] || [ ! -x "$CHROME_BIN" ]; then
+      log "runtime missing, provisioning..."
+      PROV=""
+      for cand in "$(cd "$(dirname "$0")" 2>/dev/null && pwd)/provision" "${APPBASE}/cmd/provision" "${APPDIR}/cmd/provision"; do
+        if [ -n "$cand" ] && [ -f "$cand" ]; then PROV="$cand"; break; fi
+      done
+      if [ -z "$PROV" ]; then
+        log "ERR: provision script not found"
+        exit 1
+      fi
+      bash "$PROV" >>"$LOGFILE" 2>&1 || { log "ERR: provision failed"; exit 1; }
+    fi
+    chmod +x "$CHROME_BIN" 2>/dev/null || true
+
+    do_stop
+    cd "$APPDIR" || exit 1
+    HOME="$HOME_DIR" \
+    WP_SAVER_BROWSER="$CHROME_BIN" \
+    WPS_HOST="0.0.0.0" \
+    WPS_PORT="$PORT" \
+    WPS_NO_WINDOW="1" \
+    WPS_ARCHIVE_DIR="$ARCHIVE_DIR" \
+    nohup "$NODE_BIN" "${APPDIR}/src/bundle.cjs" >>"$LOGFILE" 2>&1 &
+    echo $! >"$PIDFILE"
+
+    i=0
+    while [ "$i" -lt 40 ]; do
+      if port_open; then
+        log "started on 0.0.0.0:${PORT} pid=$(cat "$PIDFILE" 2>/dev/null)"
+        exit 0
+      fi
+      i=$((i + 1))
+      sleep 1
+    done
+    log "ERR: start timeout (port ${PORT} not listening)"
+    exit 1
+    ;;
+  stop)
+    do_stop
+    log "stopped"
+    exit 0
+    ;;
+  status)
+    if port_open; then
+      exit 0
+    fi
+    exit 1
+    ;;
+  *)
+    echo "usage: $0 {start|stop|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

@@ -1,0 +1,67 @@
+#!/bin/bash
+set -u
+APPNAME="webpagesaver"
+DATADIR="${TRIM_PKGVAR:-/var/apps/${APPNAME}/var}"
+CONF="${DATADIR}/archive_dir.conf"
+
+fail() {
+  echo "webpagesaver: $*"
+  if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+    echo "webpagesaver: $*" >>"$TRIM_TEMP_LOGFILE" 2>/dev/null
+  fi
+  exit 1
+}
+
+arch="$(uname -m)"
+echo "webpagesaver: 安装前检查 -> arch=${arch}"
+if [ "$arch" != "x86_64" ]; then
+  fail "仅支持 x86_64 架构（当前 ${arch}）"
+fi
+
+for bin in curl tar ss; do
+  command -v "$bin" >/dev/null 2>&1 || echo "webpagesaver: 警告：缺少 ${bin}"
+done
+
+mkdir -p "${DATADIR}" 2>/dev/null
+mkdir -p "${DATADIR}/archive" 2>/dev/null
+
+# ---- 自定义存档保存地址（安装向导字段 wizard_archive_dir，可留空） ----
+WANT="$(printf '%s' "${wizard_archive_dir:-}" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+while [ "${WANT%/}" != "$WANT" ]; do WANT="${WANT%/}"; done
+
+if [ -n "$WANT" ]; then
+  case "$WANT" in
+    /*) ;;
+    *) fail "存档保存地址必须是绝对路径（以 / 开头），当前填写：${WANT}" ;;
+  esac
+  case "$WANT" in
+    *" "*) fail "存档保存地址不能包含空格，当前填写：${WANT}" ;;
+  esac
+  case "$WANT" in
+    *..*) fail "存档保存地址不能包含 ..（不允许向上跳转），当前填写：${WANT}" ;;
+  esac
+  case "$WANT" in
+    /var|/var/apps|/var/apps/*|/etc|/etc/*|/usr|/usr/*|/bin|/bin/*|/sbin|/sbin/*|\
+    /lib|/lib/*|/lib64|/lib64/*|/proc|/proc/*|/sys|/sys/*|/dev|/dev/*|\
+    /boot|/boot/*|/run|/run/*|/root|/root/*|/tmp|/tmp/*|/"${APPNAME}")
+      fail "存档保存地址不能位于系统目录，请填写如 /vol1/存档/网页 这样的子目录：${WANT}" ;;
+  esac
+  # 不允许直接使用存储卷根目录（如 /vol1），必须指定其下的子目录
+  if printf '%s' "$WANT" | grep -Eq '^/vol[0-9]+/?$'; then
+    fail "不能使用存储卷根目录，请填写其下的子目录，例如 /vol1/存档/网页：${WANT}"
+  fi
+  mkdir -p "$WANT" 2>/dev/null || fail "无法创建存档目录 ${WANT}，请确认所在存储卷已挂载"
+  chmod 755 "$WANT" 2>/dev/null || true
+  if ! touch "${WANT}/.wps_write_test" 2>/dev/null; then
+    fail "存档目录 ${WANT} 不可写，请更换路径或检查目录权限"
+  fi
+  rm -f "${WANT}/.wps_write_test" 2>/dev/null
+  printf 'ARCHIVE_DIR=%s\n' "$WANT" >"$CONF" 2>/dev/null || fail "无法写入配置文件 ${CONF}"
+  echo "webpagesaver: 已设置网页存档保存地址 -> ${WANT}"
+else
+  printf 'ARCHIVE_DIR=%s\n' "${DATADIR}/archive" >"$CONF" 2>/dev/null || true
+  echo "webpagesaver: 未指定存档地址，使用默认目录 -> ${DATADIR}/archive"
+fi
+
+echo "webpagesaver: 环境检查通过"
+exit 0
