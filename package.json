@@ -1,0 +1,45 @@
+{
+  "name": "webpagesaver",
+  "version": "1.0.0",
+  "description": "把网页完整保存为单个 HTML 文件（离线可看，保留布局与页面比例，自动剔除弹窗广告）",
+  "bin": "src/index.js",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "build": "pkg . --targets node22-win-x64 --output dist/WebPageSaver.exe --compress GZip",
+    "test": "node src/index.js https://example.com -o test.html"
+  },
+  "keywords": [
+    "singlefile",
+    "save-page",
+    "offline",
+    "html",
+    "snapshot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  },
+  "pkg": {
+    "targets": [
+      "node22-win-x64"
+    ],
+    "outputPath": "dist",
+    "assets": [
+      "node_modules/puppeteer-core/**/*.js",
+      "node_modules/puppeteer-core/**/*.cjs",
+      "node_modules/puppeteer-core/**/*.mjs",
+      "node_modules/puppeteer-core/**/*.json",
+      "node_modules/chromium-bidi/**/*.js",
+      "node_modules/chromium-bidi/**/*.json",
+      "node_modules/debug/**/*.js",
+      "node_modules/ws/**/*.js",
+      "node_modules/ws/**/*.json"
+    ]
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6"
+  }
+}
